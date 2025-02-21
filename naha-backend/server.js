@@ -9,7 +9,7 @@ import walletRoutes from "./routes/walletRoutes.js";
 import protectedRoutes from "./routes/protectedRoutes.js";
 import cron from "node-cron";
 import { calculateInterest } from "./controllers/walletController.js";
-
+import mongoose from "mongoose"; 
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +22,14 @@ const app = express();
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://naha-ifme.onrender.com"],
+    credentials: true, // Allow cookies and auth headers
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(cookieParser());
 
 // API Routes
@@ -42,6 +49,21 @@ cron.schedule("0 0 1 * *", () => {
   calculateInterest();
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("Global Error:", err.message);
+  res.status(500).json({ message: "Server Error" });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, () =>
+  console.log(`✅ Server running on port ${PORT}`)
+);
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("🛑 Server shutting down...");
+  await mongoose.connection.close();
+  process.exit(0);
+});

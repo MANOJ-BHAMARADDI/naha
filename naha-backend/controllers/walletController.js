@@ -1,6 +1,24 @@
 import Wallet from "../models/Wallet.js";
 import Transaction from "../models/Transaction.js";
 
+export const getWalletDetails = async (req, res) => {
+  try {
+    const userId = req.user; // Extracted from JWT token via authMiddleware
+    
+    // Find the wallet for the logged-in user
+    const wallet = await Wallet.findOne({ user: userId });
+
+    if (!wallet) {
+      return res.status(404).json({ message: "Wallet not found" });
+    }
+
+    res.json(wallet); // Return wallet details
+  } catch (error) {
+    console.error("Error fetching wallet details:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 // Create Wallet (Only Person 1 can create it)
 export const createWallet = async (req, res) => {
   try {
