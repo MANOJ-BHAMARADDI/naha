@@ -1,0 +1,18 @@
+# Node.js dependencies
+node_modules/
+.env
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Build files
+dist/
+out/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
