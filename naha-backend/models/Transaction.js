@@ -17,11 +17,11 @@ const transactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
-      min: [1, "Amount must be greater than 0"], // Ensures positive amounts
+      min: [1, "Amount must be greater than 0"],
     },
     status: {
       type: String,
-      enum: ["success", "failed", "pending"],
+      enum: ["success", "failed", "pending", "approved"],
       default: "pending",
       trim: true,
     },

@@ -7,34 +7,25 @@ import Transaction from "../models/Transaction.js";
  */
 export const getTransactions = async (req, res) => {
   try {
-    const userId = req.user.id; // Extract user ID from authenticated request
-    const { page = 1, limit = 10 } = req.query; // Pagination parameters
+    let filters = {};
 
-    // Convert page and limit to numbers
-    const pageNum = parseInt(page, 10);
-    const limitNum = parseInt(limit, 10);
+    if (req.user.role === "Person1") {
+      filters.type = "withdrawal";
+      filters.status = { $in: ["success", "failed"] }; 
+    } else if (req.user.role === "Person2") {
+      filters.userId = req.user.id;
+      filters.status = { $ne: "failed" }; 
+    }
 
-    // Fetch transactions with pagination
-    const transactions = await Transaction.find({ userId })
-      .sort({ createdAt: -1 }) // Sort by most recent transactions
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .lean(); // Optimize query performance
+    const transactions = await Transaction.find(filters).sort({ createdAt: -1 });
 
-    // Get total transaction count for pagination metadata
-    const totalTransactions = await Transaction.countDocuments({ userId });
-
-    res.status(200).json({
-      success: true,
-      transactions,
-      totalPages: Math.ceil(totalTransactions / limitNum),
-      currentPage: pageNum,
-    });
+    res.json({ success: true, transactions });
   } catch (error) {
-    console.error("Error fetching transactions:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Fetch Transactions Error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
 
 /**
  * @desc Create a new transaction
@@ -61,5 +52,20 @@ export const createTransaction = async (req, res) => {
   } catch (error) {
     console.error("Error creating transaction:", error);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getAllTransactions = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ userId: req.user.id }).sort({ createdAt: -1 });
+
+    if (!transactions || transactions.length === 0) {
+      return res.status(404).json({ message: "No transactions found" });
+    }
+
+    res.status(200).json(transactions);
+  } catch (error) {
+    console.error("Transaction Fetch Error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

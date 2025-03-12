@@ -1,51 +1,105 @@
-import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { v4 as uuidv4 } from "uuid";
+import User from "../models/User.js";
 
-// Register User
-export const register = async (req, res) => {
+const generateToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
+};
+
+export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
-    // Check if user exists
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ message: "User already exists" });
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    if (!["Person1", "Person2"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
 
-    // Create user
-    user = new User({ name, email, password: hashedPassword });
-    await user.save();
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
 
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    res.status(201).json({ token, userId: user._id });
+    // Only generates partnerId for Person 2
+    const partnerId = role === "Person2" ? uuidv4().split("-")[0].toUpperCase() : undefined;
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+      ...(partnerId && { partnerId })
+    });
+
+    const token = generateToken(newUser._id);
+
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      user: {
+        _id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        partnerId: newUser.partnerId || null, // Send null if not assigned
+      },
+    });
   } catch (error) {
+    console.error("Registration Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Login User
-export const login = async (req, res) => {
+
+export const loginUser = async (req, res) => {
+    try {
+      const { email, password } = req.body;
+  
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+  
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+  
+      // Generate JWT Token
+      const token = jwt.sign(
+        { id: user._id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+  
+      res.json({ message: "Login successful", token });
+    } catch (error) {
+      console.error("Login Error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  };
+
+export const getCurrentUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    // Check if user exists
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
-
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-
-    // Generate token
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-    res.status(200).json({ token, userId: user._id });
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      partnerId: user.partnerId || "Not Assigned", // Ensure it's always returned
+    });
   } catch (error) {
+    console.error("Get User Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

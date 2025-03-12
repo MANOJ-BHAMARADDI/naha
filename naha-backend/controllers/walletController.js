@@ -1,129 +1,191 @@
 import Wallet from "../models/Wallet.js";
 import Transaction from "../models/Transaction.js";
+import User from "../models/User.js";
+
+
+export const createWallet = async (req, res) => {
+  try {
+    const { partnerId } = req.body;
+    const ownerId = req.user.id;
+
+    if (!partnerId) {
+      return res.status(400).json({ message: "Partner ID is required" });
+    }
+
+    // Find Person 2 by their Partner ID
+    const partner = await User.findOne({ partnerId });
+
+    if (!partner) {
+      return res.status(400).json({ message: "Invalid Partner ID" });
+    }
+
+    // Ensure Person 1 is not using their own ID
+    if (ownerId === partner._id.toString()) {
+      return res.status(400).json({ message: "You cannot use your own ID" });
+    }
+
+    const existingWallet = await Wallet.findOne({
+      $or: [
+        { owner: ownerId, partner: partner._id },
+        { owner: partner._id, partner: ownerId },
+      ],
+    });
+
+    if (existingWallet) {
+      return res.status(400).json({ message: "Wallet already exists" });
+    }
+
+    const newWallet = await Wallet.create({
+      owner: ownerId,
+      partner: partner._id,
+      balance: 0,
+      transactions: [],
+    });
+
+    res.status(201).json({ message: "Wallet created successfully", wallet: newWallet });
+  } catch (error) {
+    console.error("Error creating wallet:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
 export const getWalletDetails = async (req, res) => {
   try {
-    const userId = req.user; // Extracted from JWT token via authMiddleware
-    
-    // Find the wallet for the logged-in user
-    const wallet = await Wallet.findOne({ user: userId });
+    const wallet = await Wallet.findOne({
+      $or: [{ owner: req.user.id }, { partner: req.user.id }],
+    }).populate("transactions");
 
     if (!wallet) {
       return res.status(404).json({ message: "Wallet not found" });
     }
 
-    res.json(wallet); // Return wallet details
+    res.json(wallet);
   } catch (error) {
-    console.error("Error fetching wallet details:", error);
-    res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-// Create Wallet (Only Person 1 can create it)
-export const createWallet = async (req, res) => {
-  try {
-    const { partnerId } = req.body;
-
-    const wallet = new Wallet({
-      owner: req.user,
-      partner: partnerId,
-      balance: 0,
-    });
-
-    await wallet.save();
-    res.status(201).json({ message: "Wallet created successfully", wallet });
-  } catch (error) {
+    console.error("Error fetching wallet:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Deposit Money
 export const depositMoney = async (req, res) => {
   try {
     const { amount } = req.body;
-    const wallet = await Wallet.findOne({ owner: req.user });
+    if (amount <= 0) {
+      return res.status(400).json({ message: "Amount must be greater than 0" });
+    }
 
-    if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+    const wallet = await Wallet.findOne({ partner: req.user.id });
+    if (!wallet) {
+      return res.status(403).json({ message: "You are not allowed to deposit" });
+    }
 
     wallet.balance += amount;
-    await wallet.save();
 
     const transaction = new Transaction({
-      wallet: wallet._id,
-      sender: req.user,
+      userId: req.user.id,
+      type: "deposit",
       amount,
-      type: "DEPOSIT",
-      status: "APPROVED",
+      status: "success",
     });
 
     await transaction.save();
-    res.status(200).json({ message: "Deposit successful", balance: wallet.balance });
+    wallet.transactions.push(transaction._id);
+    await wallet.save();
+
+    res.json({ message: "Deposit successful", balance: wallet.balance });
   } catch (error) {
+    console.error("Deposit Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Request Withdrawal (Requires Approval)
 export const requestWithdrawal = async (req, res) => {
   try {
     const { amount } = req.body;
-    const wallet = await Wallet.findOne({
-      $or: [{ owner: req.user }, { partner: req.user }],
-    });
+    if (amount <= 0) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
 
-    if (!wallet) return res.status(404).json({ message: "Wallet not found" });
+    const wallet = await Wallet.findOne({ partner: req.user.id });
+    if (!wallet) {
+      return res.status(403).json({ message: "You are not allowed to withdraw" });
+    }
 
-    if (amount > wallet.balance) return res.status(400).json({ message: "Insufficient balance" });
+    if (wallet.balance < amount) {
+      return res.status(400).json({ message: "Insufficient balance" });
+    }
 
     const transaction = new Transaction({
-      wallet: wallet._id,
-      sender: req.user,
+      userId: req.user.id,
+      type: "withdrawal",
       amount,
-      type: "WITHDRAWAL",
-      status: "PENDING",
-      approvals: [],
+      status: "pending",
     });
 
     await transaction.save();
-    res.status(200).json({ message: "Withdrawal request sent, awaiting approval" });
+    wallet.transactions.push(transaction._id);
+    await wallet.save();
+
+    res.json({ message: "Withdrawal request sent, awaiting approval" });
   } catch (error) {
+    console.error("Withdrawal Request Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// Approve Withdrawal
 export const approveWithdrawal = async (req, res) => {
   try {
-    const { transactionId } = req.body;
+    const { transactionId, approved } = req.body;
+
     const transaction = await Transaction.findById(transactionId);
-
-    if (!transaction) return res.status(404).json({ message: "Transaction not found" });
-    if (transaction.status !== "PENDING") return res.status(400).json({ message: "Already processed" });
-
-    const wallet = await Wallet.findById(transaction.wallet);
-    if (![wallet.owner.toString(), wallet.partner.toString()].includes(req.user)) {
-      return res.status(403).json({ message: "Unauthorized" });
+    if (!transaction || transaction.status !== "pending") {
+      return res.status(400).json({ message: "Invalid transaction" });
     }
 
-    // Add approval
-    if (!transaction.approvals.includes(req.user)) {
-      transaction.approvals.push(req.user);
+    const wallet = await Wallet.findOne({ owner: req.user.id });
+    if (!wallet) {
+      return res.status(403).json({ message: "Unauthorized to approve" });
     }
 
-    // Require two approvals: One from Person1 and another from NaHa
-    if (transaction.approvals.length < 2) {
-      await transaction.save();
-      return res.status(200).json({ message: "Waiting for final approval" });
+    if (approved) {
+      if (wallet.balance < transaction.amount) {
+        return res.status(400).json({ message: "Insufficient funds" });
+      }
+      wallet.balance -= transaction.amount;
+      transaction.status = "success";
+    } else {
+      transaction.status = "failed";
     }
 
-    // Process withdrawal after both approvals
-    wallet.balance -= transaction.amount;
+    await transaction.save();
     await wallet.save();
 
-    transaction.status = "APPROVED";
-    await transaction.save();
-    res.status(200).json({ message: "Withdrawal approved" });
+    res.json({ message: `Withdrawal ${approved ? "approved" : "denied"}`, balance: wallet.balance });
   } catch (error) {
+    console.error("Approval Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getTransactions = async (req, res) => {
+  try {
+    let filters = {};
+
+    if (req.user.role === "Person1") {
+      filters.type = "withdrawal";
+      filters.status = { $in: ["success", "failed"] }; 
+    } else {
+      filters.userId = req.user.id;
+    }
+    
+    if (req.user.role === "Person2") {
+      filters.status = { $ne: "failed" }; // Exclude denied transactions for Person 2
+    }
+    
+    const transactions = await Transaction.find(filters).sort({ createdAt: -1 });
+    
+    res.json({ success: true, transactions });
+  } catch (error) {
+    console.error("Fetch Transactions Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

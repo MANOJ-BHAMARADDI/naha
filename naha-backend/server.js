@@ -7,14 +7,13 @@ import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import protectedRoutes from "./routes/protectedRoutes.js";
+import transactionRoutes from "./routes/transactionRoutes.js";
 import cron from "node-cron";
 import { calculateInterest } from "./controllers/walletController.js";
 import mongoose from "mongoose"; 
 
-// Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
 connectDB();
 
 const app = express();
@@ -22,21 +21,16 @@ const app = express();
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: ["http://localhost:5173", "https://naha-ifme.onrender.com"],
-    credentials: true, // Allow cookies and auth headers
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+
 app.use(cookieParser());
 
-// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/protected-route", protectedRoutes);
+app.use("/api/wallets", walletRoutes);
+app.use("/api/transactions", transactionRoutes);
 
 // Default route
 app.get("/", (req, res) => {
@@ -55,13 +49,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Server Error" });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () =>
   console.log(`✅ Server running on port ${PORT}`)
 );
 
-// Graceful shutdown
 process.on("SIGINT", async () => {
   console.log("🛑 Server shutting down...");
   await mongoose.connection.close();

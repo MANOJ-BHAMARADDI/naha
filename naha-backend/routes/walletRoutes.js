@@ -1,20 +1,19 @@
 import express from "express";
-import authMiddleware from "../middleware/authMiddleware.js";
 import {
   createWallet,
+  getWalletDetails,
   depositMoney,
   requestWithdrawal,
   approveWithdrawal,
 } from "../controllers/walletController.js";
-import { getWalletDetails } from "../controllers/walletController.js";
+import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/", authMiddleware, getWalletDetails);
 router.post("/create", authMiddleware, createWallet);
+router.get("/", authMiddleware, getWalletDetails);
 router.post("/deposit", authMiddleware, depositMoney);
-router.post("/withdraw", authMiddleware, requestWithdrawal);
-router.post("/approve", authMiddleware, approveWithdrawal);
-
+router.post("/approve-withdrawal", authMiddleware, approveWithdrawal);
+router.post("/request-withdrawal", authMiddleware, requestWithdrawal);
 
 export default router;
