@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import path from "path";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -17,12 +18,14 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const PORT = process.env.PORT || 5002;
+const __dirname = path.resolve();
 
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(cors({ origin: "http://localhost:5173", credentials: true }));
-app.use(cors({ origin: "https://naha-frontend.vercel.app", credentials: true }));
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+// app.use(cors({ origin: "https://naha-frontend.vercel.app", credentials: true }));
 
 
 app.use(cookieParser());
@@ -33,6 +36,13 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/protected-route", protectedRoutes);
 app.use("/api/wallets", walletRoutes);
 app.use("/api/transactions", transactionRoutes);
+
+app.use(express.static(path.join(__dirname, "/naha-frontend/dist")));
+
+app.get("*", (req, res) =>
+  res.sendFile(path.resolve(__dirname, "naha-frontend", "dist", "index.html"))
+);
+
 
 // Default route
 app.get("/", (req, res) => {
@@ -51,7 +61,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Server Error" });
 });
 
-const PORT = process.env.PORT || 5000;
+
 const server = app.listen(PORT, () =>
   console.log(`✅ Server running on port ${PORT}`)
 );

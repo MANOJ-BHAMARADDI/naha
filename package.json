@@ -4,8 +4,9 @@
   "description": "",
   "main": "naha-backend/server.js",
   "scripts": {
-    "dev": "nodemon naha-backend/server.js",
-    "start": "node naha-backend/server.js"
+    "dev": "NODE_ENV=development && nodemon naha-backend/server.js",
+    "start": "NODE_ENV=production && node naha-backend/server.js",
+    "build": "npm install && npm install --prefix naha-frontend && npm run build --prefix naha-frontend"
   },
   "keywords": [],
   "author": "",
