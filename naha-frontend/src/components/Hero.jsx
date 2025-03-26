@@ -11,14 +11,14 @@ const Hero = () => {
       transition={{ duration: 1 }}
     >
       <h1 className="text-5xl md:text-5xl font-bold">
-        Secure Your Advance Rent.
+        Save Your Money.
       </h1>
       <h2 className="text-5xl md:text-5xl font-bold">
-        Earn Monthly Interest.
+        Get Financial Advice through AI based on your recent transactions
       </h2>
       <p className="text-lg md:text-xl mt-6 max-w-2xl">
-        NaHa safeguards your advance rent while you earn 70% interest,  
-        and your homeowner receives 30% – All transactions are secure & transparent.
+        NaHa safeguards your money while you save money to invest  
+        in your Future – All transactions are secure & transparent.
       </p>
       
       {/* ✅ Added `my-6` for spacing */}
