@@ -29,14 +29,14 @@ export const analyzeTransactions = async (req, res) => {
     const geminiResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
-        contents: [{ parts: [{ text: `Analyze this transaction history and provide financial insights:\n${transactionText}` }] }]
+        contents: [{ parts: [{ text: `Analyze this transaction history and provide financial insights in just 5-7 lines:\n${transactionText}` }] }]
       },
       { headers: { "Content-Type": "application/json" } }
     );
     console.log("✅ Gemini Response:", geminiResponse.data);
 
-    const analysis = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available";
-
+    let analysis = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available";
+    analysis = analysis.split("\n").slice(0, 7).join("\n");
     return res.json({ analysis });
 
   } catch (error) {
