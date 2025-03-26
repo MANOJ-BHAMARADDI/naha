@@ -25,7 +25,7 @@ export const analyzeTransactions = async (req, res) => {
 
     // 🤖 Step 1: Analyze transactions using Gemini
     const geminiResponse = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
       { contents: [{ parts: [{ text: `Analyze this transaction history:\n${transactionText}` }] }] },
       { headers: { "Content-Type": "application/json" }, params: { key: process.env.GEMINI_API_KEY } }
     );
