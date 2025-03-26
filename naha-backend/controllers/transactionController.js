@@ -11,40 +11,37 @@ dotenv.config();
  */
 export const analyzeTransactions = async (req, res) => {
   try {
+    console.log("🔍 Fetching transactions...");
     const userId = req.user.id;
+    console.log("🆔 User ID:", userId);
 
-    // 🔍 Fetch transactions
     const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+    console.log("📊 Transactions:", transactions);
 
     if (!transactions.length) {
+      console.log("❌ No transactions found for user:", userId);
       return res.status(404).json({ message: "No transactions found" });
     }
 
-    // 📝 Format transactions
-    const transactionText = transactions.map(t => `${t.type}: ${t.amount}`).join("\n");
+    const transactionText = transactions.map(t => `${t.type}: ₹${t.amount}`).join("\n");
 
-    // 🤖 Step 1: Analyze transactions using Gemini
+    console.log("🤖 Sending request to Gemini...");
     const geminiResponse = await axios.post(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-      { contents: [{ parts: [{ text: `Analyze this transaction history:\n${transactionText}` }] }] },
-      { headers: { "Content-Type": "application/json" }, params: { key: process.env.GEMINI_API_KEY } }
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [{ parts: [{ text: `Analyze this transaction history and provide financial insights:\n${transactionText}` }] }]
+      },
+      { headers: { "Content-Type": "application/json" } }
     );
+    console.log("✅ Gemini Response:", geminiResponse.data);
+
     const analysis = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available";
 
-    // 🤖 Step 2: Get financial strategy from Grok
-    const grokResponse = await axios.post(
-      "https://api.grok.com/v1/chat/completions",
-      { model: "grok-1", messages: [{ role: "user", content: `Suggest financial strategies based on this:\n${analysis}` }] },
-      { headers: { Authorization: `Bearer ${process.env.GROK_API_KEY}` } }
-    );
-    const strategy = grokResponse.data.choices?.[0]?.message?.content || "No response from Grok";
-
-    // 📤 Return AI response
-    res.json({ analysis, strategy });
+    return res.json({ analysis });
 
   } catch (error) {
-    console.error("AI Analysis Error:", error);
-    res.status(500).json({ message: "Error processing request" });
+    console.error("❌ AI Processing Error:", error.message);
+    return res.status(500).json({ message: "Error processing request", error: error.message });
   }
 };
 
