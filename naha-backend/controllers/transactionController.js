@@ -1,4 +1,52 @@
 import Transaction from "../models/Transaction.js";
+import axios from "axios";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+/**
+ * @desc Analyze transactions and get AI insights
+ * @route GET /api/transactions/analyze
+ * @access Private
+ */
+export const analyzeTransactions = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 🔍 Fetch transactions
+    const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
+
+    if (!transactions.length) {
+      return res.status(404).json({ message: "No transactions found" });
+    }
+
+    // 📝 Format transactions
+    const transactionText = transactions.map(t => `${t.type}: ${t.amount}`).join("\n");
+
+    // 🤖 Step 1: Analyze transactions using Gemini
+    const geminiResponse = await axios.post(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+      { contents: [{ parts: [{ text: `Analyze this transaction history:\n${transactionText}` }] }] },
+      { headers: { "Content-Type": "application/json" }, params: { key: process.env.GEMINI_API_KEY } }
+    );
+    const analysis = geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available";
+
+    // 🤖 Step 2: Get financial strategy from Grok
+    const grokResponse = await axios.post(
+      "https://api.grok.com/v1/chat/completions",
+      { model: "grok-1", messages: [{ role: "user", content: `Suggest financial strategies based on this:\n${analysis}` }] },
+      { headers: { Authorization: `Bearer ${process.env.GROK_API_KEY}` } }
+    );
+    const strategy = grokResponse.data.choices?.[0]?.message?.content || "No response from Grok";
+
+    // 📤 Return AI response
+    res.json({ analysis, strategy });
+
+  } catch (error) {
+    console.error("AI Analysis Error:", error);
+    res.status(500).json({ message: "Error processing request" });
+  }
+};
 
 /**
  * @desc Get all transactions for the authenticated user with pagination
@@ -69,3 +117,4 @@ export const getAllTransactions = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
