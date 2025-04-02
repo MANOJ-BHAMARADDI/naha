@@ -23,7 +23,7 @@ const Hero = () => {
       
       {/* ✅ Added `my-6` for spacing */}
       <Link 
-        to="/login" 
+        to="/register" 
         className="px-4 py-2 bg-white text-blue-500 rounded-lg font-semibold hover:bg-gray-200 my-6"
       >
         Register Now

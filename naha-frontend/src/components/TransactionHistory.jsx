@@ -9,23 +9,35 @@ const TransactionHistory = () => {
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      const data = await getAllTransactions();
-      console.log("Fetched Transactions:", data.transactions); // Debugging log
-    
-      let filteredTransactions = data.transactions || [];
-    
-      if (user?.role === "Person1") {
-        filteredTransactions = filteredTransactions.filter(
-          (tx) => tx.type === "withdrawal" && (tx.status === "success" || tx.status === "failed")
-        );
-      } else if (user?.role === "Person2") {
-        filteredTransactions = filteredTransactions.filter((tx) => tx.userId === user?._id && tx.status !== "failed");
+      try {
+        const data = await getAllTransactions();
+        console.log("Fetched Transactions:", data.transactions); // Debugging log
+
+        if (!data || !data.transactions) {
+          console.error("Invalid transaction data:", data);
+          setTransactions([]);
+          return;
+        }
+
+        let filteredTransactions = data.transactions;
+
+        if (user?.role === "Person1") {
+          filteredTransactions = filteredTransactions.filter(
+            (tx) => tx.type === "withdrawal" && (tx.status === "success" || tx.status === "failed")
+          );
+        } else if (user?.role === "Person2") {
+          filteredTransactions = filteredTransactions.filter((tx) => tx.userId === user?._id && tx.status !== "failed");
+        }
+
+        setTransactions(filteredTransactions);
+      } catch (err) {
+        console.error("Error fetching transactions:", err);
+        setTransactions([]);
+      } finally {
+        setLoading(false);
       }
-    
-      console.log("Filtered Transactions:", filteredTransactions); // Checks if filtering out transactions incorrectly
-    
-      setTransactions(filteredTransactions);
-    };    
+    };
+
     fetchTransactions();
   }, [user]);
 
@@ -35,7 +47,11 @@ const TransactionHistory = () => {
       {loading ? (
         <p>Loading transactions...</p>
       ) : transactions.length === 0 ? (
-        <p className="text-gray-500">No transactions found.</p>
+        <p className="text-gray-500">
+          {user?.role === "Person1"
+            ? "No withdrawal transactions found."
+            : "No transactions found. Waiting for wallet activity."}
+        </p>
       ) : (
         <ul className="bg-white shadow-lg rounded-lg p-4 max-h-80 overflow-y-auto">
           {transactions.map((tx, index) => (
@@ -45,9 +61,11 @@ const TransactionHistory = () => {
                 tx.type === "deposit" ? "text-green-500" : "text-red-500"
               }`}
             >
-              <span>{tx.type.toUpperCase()}</span>
-              <span>₹{tx.amount}</span>
-              <span className="text-sm text-gray-500">{new Date(tx.createdAt).toLocaleDateString()}</span>
+              <span>{tx.type?.toUpperCase() || "UNKNOWN"}</span>
+              <span>₹{tx.amount || "0.00"}</span>
+              <span className="text-sm text-gray-500">
+                {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : "N/A"}
+              </span>
               {user?.role === "Person1" && (
                 <span>{tx.status === "success" ? "✅ Approved" : "❌ Denied"}</span>
               )}
