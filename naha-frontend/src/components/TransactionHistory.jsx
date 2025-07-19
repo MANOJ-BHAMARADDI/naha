@@ -13,8 +13,9 @@ const TransactionHistory = () => {
         const data = await getAllTransactions();
         console.log("Fetched Transactions:", data.transactions); // Debugging log
 
-        if (!data || !data.transactions) {
-          console.error("Invalid transaction data:", data);
+        if (!data || !data.transactions || data.transactions.length === 0) {
+          // If no transactions are found, set an empty array
+          console.log("No transactions found.");
           setTransactions([]);
           return;
         }
@@ -22,11 +23,15 @@ const TransactionHistory = () => {
         let filteredTransactions = data.transactions;
 
         if (user?.role === "Person1") {
+          // Filter for withdrawal transactions with success or failed status
           filteredTransactions = filteredTransactions.filter(
             (tx) => tx.type === "withdrawal" && (tx.status === "success" || tx.status === "failed")
           );
         } else if (user?.role === "Person2") {
-          filteredTransactions = filteredTransactions.filter((tx) => tx.userId === user?._id && tx.status !== "failed");
+          // Filter for transactions linked to the partner and exclude failed ones
+          filteredTransactions = filteredTransactions.filter(
+            (tx) => tx.wallet?.partner === user?._id && tx.status !== "failed"
+          );
         }
 
         setTransactions(filteredTransactions);
@@ -53,7 +58,10 @@ const TransactionHistory = () => {
             : "No transactions found. Waiting for wallet activity."}
         </p>
       ) : (
-        <ul className="bg-white shadow-lg rounded-lg p-4 max-h-80 overflow-y-auto">
+        <ul
+          className="bg-white shadow-lg rounded-lg p-4 max-h-80 overflow-y-auto"
+          style={{ scrollbarWidth: "thin", overflowY: "scroll" }} // Ensure scrolling
+        >
           {transactions.map((tx, index) => (
             <li
               key={index}

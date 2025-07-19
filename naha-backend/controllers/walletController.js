@@ -85,6 +85,7 @@ export const depositMoney = async (req, res) => {
       type: "deposit",
       amount,
       status: "success",
+      wallet: wallet._id,
     });
 
     await transaction.save();

@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post("/", authMiddleware, createTransaction);
 router.get("/", authMiddleware, getTransactions);
-router.get("/", authMiddleware, getAllTransactions);
-router.get("/analyze", authMiddleware, analyzeTransactions); // 🆕 AI Route
+// router.get("/", authMiddleware, getAllTransactions);
+router.get("/analyze", authMiddleware, analyzeTransactions); 
 
 export default router;

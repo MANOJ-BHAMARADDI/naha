@@ -51,7 +51,7 @@ app.get("/", (req, res) => {
 
 // Run on the 1st of every month at midnight
 cron.schedule("0 0 1 * *", () => {
-  console.log("🔄 Running monthly interest calculation...");
+  console.log("Running monthly interest calculation...");
   calculateInterest();
 });
 
@@ -63,11 +63,11 @@ app.use((err, req, res, next) => {
 
 
 const server = app.listen(PORT, () =>
-  console.log(`✅ Server running on port ${PORT}`)
+  console.log(`Server running on port ${PORT}`)
 );
 
 process.on("SIGINT", async () => {
-  console.log("🛑 Server shutting down...");
+  console.log("Server shutting down...");
   await mongoose.connection.close();
   process.exit(0);
 });
