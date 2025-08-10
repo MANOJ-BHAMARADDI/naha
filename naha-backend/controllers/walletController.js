@@ -120,6 +120,7 @@ export const requestWithdrawal = async (req, res) => {
       type: "withdrawal",
       amount,
       status: "pending",
+      wallet: wallet._id,
     });
 
     await transaction.save();

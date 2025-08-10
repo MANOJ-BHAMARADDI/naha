@@ -1,30 +1,55 @@
+import mongoose from "mongoose";
 import Transaction from "../models/Transaction.js";
-import Wallet from "../models/Wallet.js";
+import Wallet from "../models/Wallet.js"; // Import the Wallet model
 import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 /**
- * @desc Analyze transactions and get AI insights
+ * @desc Analyze transactions for the shared wallet and get AI insights
  * @route GET /api/transactions/analyze
  * @access Private
  */
 export const analyzeTransactions = async (req, res) => {
   try {
-    console.log("🔍 Fetching transactions...");
-    const userId = req.user.id;
-    console.log("🆔 User ID:", userId);
+    const loggedInUserId = req.user.id;
+    console.log(`🔍 Finding shared wallet for user: ${loggedInUserId}`);
 
-    const transactions = await Transaction.find({ userId }).sort({ createdAt: -1 });
-    console.log("📊 Transactions:", transactions);
+    // Find the wallet associated with the logged-in user (either as owner or partner)
+    const wallet = await Wallet.findOne({
+      $or: [{ owner: loggedInUserId }, { partner: loggedInUserId }],
+    });
 
-    if (!transactions.length) {
-      console.log("❌ No transactions found for user:", userId);
-      return res.status(404).json({ message: "No transactions found" });
+    if (!wallet) {
+      console.log("❌ No wallet found for this user.");
+      return res
+        .status(404)
+        .json({ message: "No wallet found for this user." });
     }
 
-    const transactionText = transactions.map((t) => `${t.type}: ₹${t.amount}`).join("\n");
+    // All transactions are created by the partner (Person2), so we use the partner's ID to fetch them.
+    const partnerId = wallet.partner;
+    console.log(
+      `🤖 Fetching all transactions for the wallet's partner: ${partnerId}`
+    );
+
+    const transactions = await Transaction.find({ userId: partnerId }).sort({
+      createdAt: -1,
+    });
+    console.log(`📊 Found ${transactions.length} transactions for the wallet.`);
+
+    if (!transactions.length) {
+      console.log("❌ No transactions found in this wallet to analyze.");
+      return res.json({
+        analysis:
+          "No transactions have been made yet. Make a deposit to get your first AI analysis!",
+      });
+    }
+
+    const transactionText = transactions
+      .map((t) => `${t.type}: ₹${t.amount}`)
+      .join("\n");
 
     console.log("🤖 Sending request to Gemini...");
     const geminiResponse = await axios.post(
@@ -34,7 +59,7 @@ export const analyzeTransactions = async (req, res) => {
           {
             parts: [
               {
-                text: `Analyze this transaction history and provide financial insights in just 5-7 lines:\n${transactionText}`,
+                text: `Analyze this shared transaction history and provide financial insights and a saving strategy in 3-4 lines:\n${transactionText}`,
               },
             ],
           },
@@ -42,17 +67,46 @@ export const analyzeTransactions = async (req, res) => {
       },
       { headers: { "Content-Type": "application/json" } }
     );
-    console.log("✅ Gemini Response:", geminiResponse.data);
+    console.log("✅ Gemini Response received.");
 
     let analysis =
-      geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis available";
-    analysis = analysis.split("\n").slice(0, 7).join("\n");
-    return res.json({ analysis });
+      geminiResponse.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Could not generate analysis at this time.";
+
+    // Also create a strategy from the analysis
+    const strategyResponse = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `Based on this analysis, suggest a simple, one-sentence saving strategy:\n${analysis}`,
+              },
+            ],
+          },
+        ],
+      },
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    let strategy =
+      strategyResponse.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "No strategy available.";
+
+    return res.json({ analysis, strategy });
   } catch (error) {
-    console.error("❌ AI Processing Error:", error.message);
-    return res.status(500).json({ message: "Error processing request", error: error.message });
+    console.error("❌ AI Processing Error:", error);
+    if (error.response) {
+      console.error("Gemini API Error Response:", error.response.data);
+    }
+    return res
+      .status(500)
+      .json({ message: "Error processing request", error: error.message });
   }
 };
+
+// ... (the rest of your controller functions: getTransactions, createTransaction, etc.)
 
 /**
  * @desc Get all transactions for the authenticated user with pagination
@@ -62,35 +116,24 @@ export const analyzeTransactions = async (req, res) => {
 export const getTransactions = async (req, res) => {
   try {
     let filters = {};
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-    if (req.user.role === "Person1") {
-      // Check if the user has a wallet
-      const wallet = await Wallet.findOne({ owner: req.user.id });
-      if (!wallet) {
-        // If no wallet exists, return an empty array
-        return res.json({ success: true, transactions: [] });
+    if (userRole === "Person1") {
+      // Owner should see withdrawal requests from the shared wallet's partner
+      const wallet = await Wallet.findOne({ owner: userId });
+      if (wallet) {
+        filters.userId = wallet.partner;
+        filters.type = "withdrawal";
       }
-
-      // Filter transactions for withdrawals linked to the wallet
-      filters.wallet = wallet._id;
-      filters.type = "withdrawal";
-      filters.status = { $in: ["success", "failed"] };
-    } else if (req.user.role === "Person2") {
-      // Check if the user is linked to any wallet
-      const wallet = await Wallet.findOne({ partner: req.user.id });
-      if (!wallet) {
-        // If no wallet exists, return an empty array
-        return res.json({ success: true, transactions: [] });
-      }
-
-      // Filter transactions for the partner's wallet
-      filters.wallet = wallet._id;
-      filters.status = { $ne: "failed" };
+    } else if (userRole === "Person2") {
+      // Partner sees their own transactions
+      filters.userId = new mongoose.Types.ObjectId(userId);
     }
 
-    // Fetch transactions based on the filters
-    const transactions = await Transaction.find(filters).sort({ createdAt: -1 });
-
+    const transactions = await Transaction.find(filters).sort({
+      createdAt: -1,
+    });
     res.json({ success: true, transactions });
   } catch (error) {
     console.error("Fetch Transactions Error:", error);
@@ -105,20 +148,16 @@ export const getTransactions = async (req, res) => {
  */
 export const createTransaction = async (req, res) => {
   try {
-    const { type, amount, status, walletId } = req.body;
+    const { type, amount, status } = req.body;
 
-    if (!type || !amount || !status || !walletId) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
-    }
-
-    // Ensure the wallet exists and is linked to the user
-    const wallet = await Wallet.findById(walletId);
-    if (!wallet) {
-      return res.status(404).json({ success: false, message: "Wallet not found" });
+    if (!type || !amount || !status) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
     }
 
     const transaction = new Transaction({
-      wallet: walletId, // Link transaction to the wallet
+      userId: req.user.id,
       type,
       amount,
       status,
@@ -132,32 +171,19 @@ export const createTransaction = async (req, res) => {
   }
 };
 
-/**
- * @desc Get all transactions for the authenticated user
- * @route GET /api/transactions/all
- * @access Private
- */
 export const getAllTransactions = async (req, res) => {
   try {
-    // Fetch transactions linked to the user's wallet
-    const wallet = await Wallet.findOne({
-      $or: [{ owner: req.user.id }, { partner: req.user.id }],
+    const transactions = await Transaction.find({ userId: req.user.id }).sort({
+      createdAt: -1,
     });
-
-    if (!wallet) {
-      return res.status(404).json({ message: "No transactions found" });
-    }
-
-    const transactions = await Transaction.find({ wallet: wallet._id }).sort({ createdAt: -1 });
 
     if (!transactions || transactions.length === 0) {
       return res.status(404).json({ message: "No transactions found" });
     }
 
-    res.status(200).json({ success: true, transactions });
+    res.status(200).json(transactions);
   } catch (error) {
     console.error("Transaction Fetch Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-

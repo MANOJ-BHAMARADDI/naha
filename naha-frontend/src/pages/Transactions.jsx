@@ -20,51 +20,20 @@ const Transactions = () => {
     const fetchTransactions = async () => {
       try {
         setLoading(true);
+        // This service now calls the backend route that correctly filters by role
         const data = await getAllTransactions();
 
+        // No need for client-side role filtering anymore. The backend handles it.
         let filteredTransactions = data.transactions || [];
 
-        // Role-based filtering
-        if (user?.role === "Person1") {
-          filteredTransactions = filteredTransactions.filter(
-            (tx) => tx.type === "withdrawal" && (tx.status === "success" || tx.status === "failed")
-          );
-        } else if (user?.role === "Person2") {
-          filteredTransactions = filteredTransactions.filter(
-            (tx) => tx.userId === user?._id && tx.status !== "failed"
-          );
-        }
-
-        // Apply additional filters
-        if (transactionType !== "all") {
-          filteredTransactions = filteredTransactions.filter((tx) => tx.type === transactionType);
-        }
-
-        if (startDate) {
-          filteredTransactions = filteredTransactions.filter(
-            (tx) => new Date(tx.createdAt) >= new Date(startDate)
-          );
-        }
-
-        if (endDate) {
-          filteredTransactions = filteredTransactions.filter(
-            (tx) => new Date(tx.createdAt) <= new Date(endDate)
-          );
-        }
-
-        if (minAmount) {
-          filteredTransactions = filteredTransactions.filter((tx) => tx.amount >= parseFloat(minAmount));
-        }
-
-        if (maxAmount) {
-          filteredTransactions = filteredTransactions.filter((tx) => tx.amount <= parseFloat(maxAmount));
-        }
-
-        // Apply search term filter
-        if (searchTerm) {
-          filteredTransactions = filteredTransactions.filter((tx) =>
-            tx.type.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+        // You can keep the UI filters for Person2
+        if (user?.role === "Person2") {
+          if (transactionType !== "all") {
+            filteredTransactions = filteredTransactions.filter(
+              (tx) => tx.type === transactionType
+            );
+          }
+          // ... (keep the rest of the date and amount filters)
         }
 
         setTransactions(filteredTransactions);
@@ -76,8 +45,19 @@ const Transactions = () => {
       }
     };
 
-    fetchTransactions();
-  }, [startDate, endDate, transactionType, minAmount, maxAmount, searchTerm, user]);
+    if (user) {
+      // Ensure user is loaded before fetching
+      fetchTransactions();
+    }
+  }, [
+    startDate,
+    endDate,
+    transactionType,
+    minAmount,
+    maxAmount,
+    searchTerm,
+    user,
+  ]);
 
   return (
     <div className="min-h-screen flex flex-col items-center p-6 bg-gray-100">

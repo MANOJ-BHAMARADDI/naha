@@ -117,10 +117,6 @@ const Dashboard = () => {
             <h4 className="font-semibold">📊 Analysis:</h4>
             <p className="text-gray-700">{data?.analysis}</p>
           </div>
-          <div className="p-4 border-l-4 border-green-500 bg-green-50 rounded mt-4">
-            <h4 className="font-semibold">💰 Suggested Strategy:</h4>
-            <p className="text-gray-700">{data?.strategy}</p>
-          </div>
         </>
       )}
     </div>

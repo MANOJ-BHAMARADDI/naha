@@ -23,7 +23,7 @@ const Register = () => {
     try {
       const res = await api.post("/auth/register", formData);
       if (res.data.token) {
-        localStorage.setItem("token", `Bearer ${res.data.token}`); // Store token correctly
+        localStorage.setItem("token", res.data.token); // Store token correctly
       } else {
         console.error("Token not received from backend");
       }      
